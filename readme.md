@@ -1,7 +1,7 @@
 ## Yubilock
 This Waybar module adds a service that will lock your screen when your Yubikey is removed. The service is controlled by a toggle button in Waybar. This allows you to disable the service to conserve resources when the threat model is low risk, and to enable it when the threat model is higher risk (such as in an airport or coffee shop).
 
-![Screenshot](/home/greg/Programs/github/yubilock/resources/Screenshot.png)
+![Screenshot](/resources/Screenshot.png)
 
 The indicator will show the current status of the service and whether a YubiKey is currently inserted.
 
