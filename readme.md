@@ -14,6 +14,47 @@ This Waybar module is intended to be used with hardware like the following (ref 
 - [usbutils](http://www.linux-usb.org/) needed to run `lsusb`
 
 ## Installation Instructions
+
+### Option 1: NixOS with Home Manager (Recommended for NixOS users)
+
+For NixOS users with Home Manager, you can use the included NixOS module for automatic systemd service management:
+
+1. Import the module in your Home Manager configuration:
+   ```nix
+   { config, pkgs, ... }:
+   {
+     imports = [
+       /path/to/yubilock/yubilock.nix
+     ];
+
+     services.yubilock = {
+       enable = true;
+       autoRestore = true;  # Automatically restore yubilock state on login
+     };
+   }
+   ```
+
+2. Copy the Waybar scripts to `~/.config/waybar/scripts/`:
+   ```bash
+   mkdir -p ~/.config/waybar/scripts/
+   cp scripts/*.sh ~/.config/waybar/scripts/
+   chmod +x ~/.config/waybar/scripts/*.sh
+   ```
+
+3. Add the custom module to your Waybar config (see [Waybar Configuration](#part-3-waybar-configuration)).
+
+4. Add the CSS to your Waybar style.css (see [Waybar CSS Style](#part-4-waybar-css-style)).
+
+5. Rebuild your NixOS configuration:
+   ```bash
+   home-manager switch
+   ```
+
+The systemd services will be automatically configured:
+- `yubilock.service` - Monitors YubiKey presence and locks screen on removal
+- `yubilock-restore.service` - Restores yubilock state on login (if `autoRestore = true`)
+
+### Option 2: Manual Installation (All Linux distributions)
 1. Save the three scripts to: `~/.config/waybar/scripts/`
 2. Make them executable:
    ```
