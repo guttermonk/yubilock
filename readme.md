@@ -186,6 +186,7 @@ Add this to your Waybar configuration file:
 "custom/yubilock" = {
   return-type = "json";
   interval = 5;
+  signal = 5;
   exec = config.services.yubilock.statusCommand;
   on-click = config.services.yubilock.toggleCommand;
   tooltip = true;
@@ -201,6 +202,7 @@ Add this to your Waybar configuration file:
 "custom/yubilock": {
     "return-type": "json",
     "interval": 5,
+    "signal": 5,
     "exec": "$HOME/.config/waybar/scripts/yubikey-status.sh",
     "on-click": "$HOME/.config/waybar/scripts/yubilock-toggle.sh",
     "tooltip": true,
@@ -211,6 +213,8 @@ Add this to your Waybar configuration file:
     },
 }
 ```
+
+`signal = 5` matters more than it looks. Without it Waybar only repaints the indicator on its `interval`, so clicking the toggle leaves the icon showing the old state for up to five seconds. Yubilock sends `SIGRTMIN+5` whenever the state changes, and this line is what makes Waybar listen — with it, the icon flips the instant you click.
 
 ## Part 5: Waybar CSS Style
 Add this to your Waybar style.css file:
