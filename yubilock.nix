@@ -4,93 +4,54 @@ with lib;
 
 let
   cfg = config.services.yubilock;
-  
-  # Script paths - users should copy scripts to their ~/.config/waybar/scripts/
+
+  # Actions that never hand control back to the monitoring script. A secondary
+  # action queued behind one of these could never run.
+  terminalActions = [ "poweroff" "hibernate" ];
+  isTerminal = a: a != null && elem a terminalActions;
+
+  # The shell sees "null" as an empty string.
+  actionStr = a: if a == null then "" else a;
+  actionName = a: if a == null then "null" else a;
+
+  runtimeDeps = with pkgs; [
+    usbutils    # lsusb
+    gnugrep
+    gawk
+    coreutils
+    procps      # pkill, ps
+    systemd     # systemctl, loginctl
+    libnotify   # notify-send
+  ];
+
+  # The module and the manual install run byte-identical logic — the script is
+  # read from scripts/yubilock.sh rather than duplicated here, so the two
+  # install paths cannot drift apart.
   yubilockScript = pkgs.writeShellScript "yubilock" ''
-    STATE_FILE="$HOME/.cache/yubilock-state"
-    LOG_FILE="$HOME/.cache/yubilock.log"
-    PID_FILE="$HOME/.cache/yubilock.pid"
-
-    # Function to check if a YubiKey is currently plugged in
-    check_yubikey() {
-        if ${pkgs.usbutils}/bin/lsusb | ${pkgs.gnugrep}/bin/grep -i "yubikey" > /dev/null; then
-            return 0 # device is present
-        else
-            return 1 # device is not present
-        fi
-    }
-
-    # Function to lock the screen
-    lock_screen() {
-        # Using loginctl for systemd-based systems
-        ${pkgs.systemd}/bin/loginctl lock-session
-        echo "Screen locked at $(date)" >> "$LOG_FILE"
-    }
-
-    # Create state file if it doesn't exist
-    if [ ! -f "$STATE_FILE" ]; then
-        echo "off" > "$STATE_FILE"
-    fi
-
-    # Record PID for later termination
-    echo "$$" > "$PID_FILE"
-
-    # Main monitoring loop
-    echo "YubiKey monitoring started at $(date)" >> "$LOG_FILE"
-
-    while true; do
-        # Check if monitoring is still enabled
-        if [ "$(cat "$STATE_FILE")" != "on" ]; then
-            echo "YubiKey monitoring stopped at $(date)" >> "$LOG_FILE"
-            exit 0
-        fi
-
-        if check_yubikey; then
-            echo "YubiKey detected at $(date)" >> "$LOG_FILE"
-
-            # Wait until the YubiKey is removed
-            while check_yubikey && [ "$(cat "$STATE_FILE")" = "on" ]; do
-                sleep 1
-            done
-
-            # If we exited because service was disabled, exit gracefully
-            if [ "$(cat "$STATE_FILE")" != "on" ]; then
-                echo "YubiKey monitoring stopped at $(date)" >> "$LOG_FILE"
-                exit 0
-            fi
-
-            echo "YubiKey removed at $(date)" >> "$LOG_FILE"
-            lock_screen
-        else
-            echo "No YubiKey detected. Checking again in 10 seconds..." >> "$LOG_FILE"
-            # Check less frequently to reduce system load
-            sleep 10
-        fi
-    done
+    export PATH="${makeBinPath runtimeDeps}:$PATH"
+    ${builtins.readFile ./scripts/yubilock.sh}
   '';
 
   yubilockRestoreScript = pkgs.writeShellScript "yubilock-restore" ''
+    export PATH="${makeBinPath runtimeDeps}:$PATH"
     STATE_FILE="$HOME/.cache/yubilock-state"
     LOG_FILE="$HOME/.cache/yubilock-restore.log"
-    
+
     echo "[$(date)] Checking yubilock state on login" >> "$LOG_FILE"
-    
-    # Create state file if it doesn't exist
+
     if [ ! -f "$STATE_FILE" ]; then
         echo "off" > "$STATE_FILE"
         echo "[$(date)] No state file found, defaulting to off" >> "$LOG_FILE"
         exit 0
     fi
-    
-    # Read the saved state
+
     saved_state=$(cat "$STATE_FILE")
     echo "[$(date)] Saved state: $saved_state" >> "$LOG_FILE"
-    
-    # If it was enabled before, re-enable it
+
     if [ "$saved_state" = "on" ]; then
-        if ! ${pkgs.systemd}/bin/systemctl --user is-active yubilock.service > /dev/null 2>&1; then
+        if ! systemctl --user is-active yubilock.service > /dev/null 2>&1; then
             echo "[$(date)] Restoring yubilock service" >> "$LOG_FILE"
-            ${pkgs.systemd}/bin/systemctl --user start yubilock.service
+            systemctl --user start yubilock.service
             echo "[$(date)] Yubilock service restored" >> "$LOG_FILE"
         else
             echo "[$(date)] Yubilock service already running" >> "$LOG_FILE"
@@ -100,7 +61,7 @@ let
 
 in {
   options.services.yubilock = {
-    enable = mkEnableOption "YubiKey screen lock monitor";
+    enable = mkEnableOption "YubiKey removal monitor";
 
     autoRestore = mkOption {
       type = types.bool;
@@ -111,13 +72,127 @@ in {
         if it was running when you last logged out.
       '';
     };
+
+    primaryAction = mkOption {
+      type = types.nullOr (types.enum [ "lock" "poweroff" "hibernate" ]);
+      default = "lock";
+      description = ''
+        What happens the moment the YubiKey is removed.
+
+        `null` does nothing immediately, which only makes sense alongside a
+        `secondaryAction` — it leaves the session usable during the grace
+        period. Note that this also leaves the Waybar toggle reachable, so
+        anyone holding the machine can switch yubilock off before the
+        secondary action fires.
+
+        `poweroff` and `hibernate` end the session, so nothing can follow
+        them; set `secondaryAction = null` when using either here.
+      '';
+    };
+
+    gracePeriod = mkOption {
+      type = types.ints.unsigned;
+      default = 60;
+      description = ''
+        Seconds between the primary and secondary actions. Reinserting the
+        YubiKey during this window cancels the secondary action, as does
+        switching yubilock off.
+
+        Has no effect when `secondaryAction` is null. Set to 0 for a
+        secondary action with no cancellation window.
+      '';
+    };
+
+    secondaryAction = mkOption {
+      type = types.nullOr (types.enum [ "lock" "poweroff" "hibernate" ]);
+      default = null;
+      description = ''
+        What happens once the grace period elapses without the YubiKey
+        coming back. `null` means nothing does — removal triggers only the
+        primary action, which is yubilock's original behaviour.
+
+        This is the option that takes the disk out of its decrypted state.
+        A root LUKS volume cannot be closed while you are running on it, so
+        `poweroff` is what actually re-encrypts it; `hibernate` does too,
+        but has to write all of RAM to swap first and is correspondingly
+        slower to take effect.
+      '';
+    };
+
+    notify = {
+      enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Send a desktop notification when the YubiKey is removed.
+
+          Off by default: with the usual `primaryAction = "lock"` the screen
+          is already locked by the time it would appear, and most lockers
+          hide notifications anyway.
+
+          It earns its place in configurations where the session stays
+          usable during the grace period, where a deliberately unremarkable
+          message can tell you yubilock has started without announcing to
+          anyone else what is about to happen.
+        '';
+      };
+
+      title = mkOption {
+        type = types.str;
+        default = "Yubilock";
+        description = "Notification title.";
+      };
+
+      message = mkOption {
+        type = types.str;
+        default = "YubiKey removed.";
+        description = "Notification body.";
+      };
+    };
   };
 
   config = mkIf cfg.enable {
-    # Systemd user service for yubilock
+    assertions = [
+      {
+        assertion = cfg.secondaryAction == null || !(isTerminal cfg.primaryAction);
+        message = ''
+          services.yubilock: primaryAction = "${actionName cfg.primaryAction}" ends the
+          session, so secondaryAction = "${actionName cfg.secondaryAction}" can never run.
+
+          For an immediate ${actionName cfg.primaryAction} and nothing else:
+            primaryAction = "${actionName cfg.primaryAction}";
+            secondaryAction = null;
+
+          For a cancellable grace period first:
+            primaryAction = null;  # or "lock"
+            gracePeriod = 60;
+            secondaryAction = "${actionName cfg.primaryAction}";
+        '';
+      }
+      {
+        assertion = !(cfg.primaryAction == null && cfg.secondaryAction == null);
+        message = ''
+          services.yubilock: both primaryAction and secondaryAction are null,
+          so the service would monitor the YubiKey and then do nothing.
+        '';
+      }
+    ];
+
+    # Consumed by scripts/yubilock.sh and scripts/yubikey-status.sh, so the
+    # Waybar indicator and the monitor always agree on the configuration.
+    xdg.configFile."yubilock/config".text = ''
+      # Generated by services.yubilock — edit your Nix configuration instead.
+      YUBILOCK_PRIMARY_ACTION=${escapeShellArg (actionStr cfg.primaryAction)}
+      YUBILOCK_GRACE_PERIOD=${toString cfg.gracePeriod}
+      YUBILOCK_SECONDARY_ACTION=${escapeShellArg (actionStr cfg.secondaryAction)}
+      YUBILOCK_NOTIFY=${escapeShellArg (boolToString cfg.notify.enable)}
+      YUBILOCK_NOTIFY_TITLE=${escapeShellArg cfg.notify.title}
+      YUBILOCK_NOTIFY_MESSAGE=${escapeShellArg cfg.notify.message}
+    '';
+
     systemd.user.services.yubilock = {
       Unit = {
-        Description = "YubiKey lock screen monitor";
+        Description = "YubiKey removal monitor";
         After = [ "graphical-session.target" ];
         PartOf = [ "graphical-session.target" ];
       };
@@ -126,17 +201,15 @@ in {
         ExecStart = "${yubilockScript}";
         Restart = "on-failure";
         RestartSec = "5s";
-        # Ensure state persists
         ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p %h/.cache";
-        # Clean state on stop
-        ExecStopPost = "${pkgs.bash}/bin/bash -c 'echo off > %h/.cache/yubilock-state'";
+        # No ExecStopPost resetting the state file: it would overwrite the
+        # saved state on every logout, leaving autoRestore nothing to restore.
       };
       Install = {
         WantedBy = [ "graphical-session.target" ];
       };
     };
-    
-    # Systemd user service to restore yubilock state on login
+
     systemd.user.services.yubilock-restore = mkIf cfg.autoRestore {
       Unit = {
         Description = "Restore YubiKey monitor state on login";
@@ -152,9 +225,9 @@ in {
       };
     };
 
-    # Ensure required packages are available
     home.packages = with pkgs; [
-      usbutils  # for lsusb command
+      usbutils   # lsusb, for the Waybar status script
+      libnotify  # notify-send
     ];
   };
 }
