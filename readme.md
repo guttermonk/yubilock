@@ -109,25 +109,28 @@ If the machine suspends mid-countdown (lid close, idle suspend) and is resumed l
    }
    ```
 
-2. Copy the Waybar scripts to `~/.config/waybar/scripts/`:
-   ```bash
-   mkdir -p ~/.config/waybar/scripts/
-   cp scripts/*.sh ~/.config/waybar/scripts/
-   chmod +x ~/.config/waybar/scripts/*.sh
-   ```
+2. Add the custom module to your Waybar config (see [Waybar Configuration](#part-4-waybar-configuration)).
 
-3. Add the custom module to your Waybar config (see [Waybar Configuration](#part-4-waybar-configuration)).
+3. Add the CSS to your Waybar style.css (see [Waybar CSS Style](#part-5-waybar-css-style)).
 
-4. Add the CSS to your Waybar style.css (see [Waybar CSS Style](#part-5-waybar-css-style)).
-
-5. Rebuild your configuration:
+4. Rebuild your configuration:
    ```bash
    home-manager switch
    ```
 
+There is no step to copy scripts anywhere. The module packages them with their dependencies wrapped in and puts them on your `PATH` as `yubilock`, `yubikey-status` and `yubilock-toggle`, so they cannot go stale or fail because `lsusb` was missing from Waybar's environment.
+
 The module writes `~/.config/yubilock/config`, which both the monitor and the Waybar indicator read, and configures these services:
 - `yubilock.service` — monitors YubiKey presence and acts on removal
 - `yubilock-restore.service` — restores yubilock state on login (if `autoRestore = true`)
+
+Three read-only options expose the packaged commands so your Waybar config never hardcodes a path:
+
+| Option | Command |
+|---|---|
+| `services.yubilock.statusCommand` | the Waybar status script |
+| `services.yubilock.toggleCommand` | the Waybar click handler |
+| `services.yubilock.monitorCommand` | the monitor itself |
 
 ### Option 2: Manual Installation (All Linux distributions)
 1. Save the scripts to `~/.config/waybar/scripts/`
@@ -151,6 +154,8 @@ The module writes `~/.config/yubilock/config`, which both the monitor and the Wa
 4. Add the custom module to your Waybar config (see [Waybar Configuration](#part-4-waybar-configuration)).
 5. Add the CSS to your Waybar style.css (see [Waybar CSS Style](#part-5-waybar-css-style)).
 6. Restart Waybar: `killall waybar && waybar &`
+
+The toggle detects which install it is running under. If a `yubilock.service` user unit exists it starts and stops the monitor through systemd; otherwise it runs the monitor as a background process, as it always did. One script, both install paths.
 
 ## Part 3: Making the power-off unstoppable (optional, NixOS)
 
@@ -181,8 +186,8 @@ Add this to your Waybar configuration file:
 "custom/yubilock" = {
   return-type = "json";
   interval = 5;
-  exec = "$HOME/.config/waybar/scripts/yubikey-status.sh";
-  on-click = "$HOME/.config/waybar/scripts/yubilock-toggle.sh";
+  exec = config.services.yubilock.statusCommand;
+  on-click = config.services.yubilock.toggleCommand;
   tooltip = true;
   format = "{icon}";
   format-icons = {

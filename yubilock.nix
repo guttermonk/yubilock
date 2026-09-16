@@ -24,13 +24,26 @@ let
     libnotify   # notify-send
   ];
 
-  # The module and the manual install run byte-identical logic — the script is
-  # read from scripts/yubilock.sh rather than duplicated here, so the two
-  # install paths cannot drift apart.
-  yubilockScript = pkgs.writeShellScript "yubilock" ''
-    export PATH="${makeBinPath runtimeDeps}:$PATH"
-    ${builtins.readFile ./scripts/yubilock.sh}
-  '';
+  # The module and the manual install run byte-identical logic — each script is
+  # read from scripts/ rather than duplicated here, so the two install paths
+  # cannot drift apart.
+  #
+  # writeShellScriptBin rather than writeShellApplication: the latter imposes
+  # `set -euo pipefail`, and fail-fast is the wrong posture for a security
+  # monitor. A stray non-zero exit from `pkill` or a missing config file would
+  # kill the process, leaving you unprotected while the indicator still reads
+  # ON. These scripts are written to keep running instead.
+  mkScript = name: file: extraDeps:
+    pkgs.writeShellScriptBin name ''
+      export PATH="${makeBinPath (runtimeDeps ++ extraDeps)}:$PATH"
+      ${builtins.readFile file}
+    '';
+
+  monitorPkg = mkScript "yubilock" ./scripts/yubilock.sh [ ];
+  statusPkg = mkScript "yubikey-status" ./scripts/yubikey-status.sh [ ];
+  # The toggle shells out to the monitor on non-systemd installs, so it needs
+  # to be able to find it.
+  togglePkg = mkScript "yubilock-toggle" ./scripts/yubilock-toggle.sh [ monitorPkg ];
 
   yubilockRestoreScript = pkgs.writeShellScript "yubilock-restore" ''
     export PATH="${makeBinPath runtimeDeps}:$PATH"
@@ -119,6 +132,36 @@ in {
       '';
     };
 
+    monitorCommand = mkOption {
+      type = types.str;
+      readOnly = true;
+      default = "${monitorPkg}/bin/yubilock";
+      description = "Path to the packaged monitor. Read-only.";
+    };
+
+    statusCommand = mkOption {
+      type = types.str;
+      readOnly = true;
+      default = "${statusPkg}/bin/yubikey-status";
+      description = ''
+        Path to the packaged Waybar status script. Read-only — reference it
+        from your Waybar configuration rather than hardcoding a path:
+
+          exec = config.services.yubilock.statusCommand;
+      '';
+    };
+
+    toggleCommand = mkOption {
+      type = types.str;
+      readOnly = true;
+      default = "${togglePkg}/bin/yubilock-toggle";
+      description = ''
+        Path to the packaged Waybar toggle script. Read-only:
+
+          on-click = config.services.yubilock.toggleCommand;
+      '';
+    };
+
     notify = {
       enable = mkOption {
         type = types.bool;
@@ -198,7 +241,7 @@ in {
       };
       Service = {
         Type = "simple";
-        ExecStart = "${yubilockScript}";
+        ExecStart = cfg.monitorCommand;
         Restart = "on-failure";
         RestartSec = "5s";
         ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p %h/.cache";
@@ -225,9 +268,8 @@ in {
       };
     };
 
-    home.packages = with pkgs; [
-      usbutils   # lsusb, for the Waybar status script
-      libnotify  # notify-send
-    ];
+    # Packaged with their dependencies wrapped in, so there is nothing to copy
+    # into ~/.config/waybar/scripts and nothing to keep in sync by hand.
+    home.packages = [ monitorPkg statusPkg togglePkg ];
   };
 }
