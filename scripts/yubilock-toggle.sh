@@ -51,15 +51,16 @@ fi
 
 current_state=$(cat "$STATE_FILE")
 
+# No notification either way: the indicator glyph changes as the monitor starts
+# or stops, which already says what happened. A toast on every click would be
+# noise, and `notify.enable` is about YubiKey removal, not about the toggle.
 sleep 1
 if [ "$current_state" = "on" ]; then
-    notify-send "Yubilock is shutting down" -e
     echo "off" > "$STATE_FILE"
     stop_monitor
     echo '{"text": "Yubilock: OFF", "class": "yubilock-off", "tooltip": "Yubilock disabled"}'
 else
     echo "on" > "$STATE_FILE"
-    notify-send "Yubilock is now starting" -e
     start_monitor
     echo '{"text": "Yubilock: ON", "class": "yubilock-on", "tooltip": "Yubilock enabled"}'
 fi
