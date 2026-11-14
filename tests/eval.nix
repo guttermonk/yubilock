@@ -1,7 +1,7 @@
 # Module-level tests: which configurations evaluate, which the assertions
 # reject, and what ends up in the generated config file.
 #
-#   nix-instantiate --eval --strict --json tests/eval.nix
+#   nix-instantiate --eval --strict --json --expr 'import ./tests/eval.nix { }'
 #
 # Every attribute ending in _ok must be true; hibernateThenPoweroff and
 # bothNull must each return a non-empty list of assertion messages.

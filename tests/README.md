@@ -32,13 +32,16 @@ periods.
 These need a nixpkgs. With a channel configured, `<nixpkgs>` resolves on its
 own; otherwise point them at one explicitly.
 
+`eval.nix` is a function, and `nix-instantiate --eval` hands back the function
+itself rather than calling it, so import and apply it yourself:
+
 ```bash
-nix-instantiate --eval --strict --json tests/eval.nix
+nix-instantiate --eval --strict --json --expr 'import ./tests/eval.nix { }'
 nix-build tests/packages.nix
 
 # offline, or pinning a specific tree:
-nix-instantiate --eval --strict --json tests/eval.nix \
-  --arg pkgs 'import /path/to/nixpkgs {}'
+nix-instantiate --eval --strict --json \
+  --expr 'import ./tests/eval.nix { pkgs = import /path/to/nixpkgs { }; }'
 ```
 
 `eval.nix` checks which configurations the module accepts, which the assertions
