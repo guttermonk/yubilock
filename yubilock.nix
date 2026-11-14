@@ -219,7 +219,10 @@ in {
         ExecStart = cfg.monitorCommand;
         Restart = "on-failure";
         RestartSec = "5s";
-        ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p %h/.cache";
+        # No ExecStartPre creating ~/.cache: the scripts do that themselves, so
+        # the toggle and the status indicator get it too — they run from Waybar,
+        # not from this unit.
+        #
         # No ExecStopPost resetting the state file: it would overwrite the
         # saved state on every logout, leaving autoRestore nothing to restore.
       };

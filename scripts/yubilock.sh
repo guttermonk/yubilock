@@ -7,10 +7,16 @@
 # file present the defaults below reproduce the original behaviour: lock the
 # session on removal, and nothing more.
 
-STATE_FILE="$HOME/.cache/yubilock-state"
-PID_FILE="$HOME/.cache/yubilock.pid"
-LOG_FILE="$HOME/.cache/yubilock.log"
+CACHE_DIR="$HOME/.cache"
+STATE_FILE="$CACHE_DIR/yubilock-state"
+PID_FILE="$CACHE_DIR/yubilock.pid"
+LOG_FILE="$CACHE_DIR/yubilock.log"
 CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/yubilock/config"
+
+# ~/.cache is not guaranteed to exist. Every script that keeps state creates it
+# itself rather than relying on the service unit, because the toggle, the status
+# indicator and the restore oneshot all run outside it.
+mkdir -p "$CACHE_DIR"
 
 # --- defaults -----------------------------------------------------------
 # Empty string means "null" / do nothing for the action variables.

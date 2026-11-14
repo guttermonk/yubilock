@@ -3,8 +3,11 @@
 # Restore the yubilock monitor on login if it was running when the session
 # ended. Run as a systemd oneshot by the module; harmless to run by hand.
 
-STATE_FILE="$HOME/.cache/yubilock-state"
-LOG_FILE="$HOME/.cache/yubilock-restore.log"
+CACHE_DIR="$HOME/.cache"
+STATE_FILE="$CACHE_DIR/yubilock-state"
+LOG_FILE="$CACHE_DIR/yubilock-restore.log"
+
+mkdir -p "$CACHE_DIR"
 
 echo "[$(date)] Checking yubilock state on login" >> "$LOG_FILE"
 

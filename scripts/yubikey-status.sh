@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
-STATE_FILE="$HOME/.cache/yubilock-state"
-PID_FILE="$HOME/.cache/yubilock.pid"
+CACHE_DIR="$HOME/.cache"
+STATE_FILE="$CACHE_DIR/yubilock-state"
+PID_FILE="$CACHE_DIR/yubilock.pid"
+
+mkdir -p "$CACHE_DIR"
 CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/yubilock/config"
 
 YUBILOCK_PRIMARY_ACTION="lock"

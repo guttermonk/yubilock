@@ -7,8 +7,11 @@
 # matches reality. Without the unit (manual install) it falls back to running
 # the monitor as a background process.
 
-STATE_FILE="$HOME/.cache/yubilock-state"
-PID_FILE="$HOME/.cache/yubilock.pid"
+CACHE_DIR="$HOME/.cache"
+STATE_FILE="$CACHE_DIR/yubilock-state"
+PID_FILE="$CACHE_DIR/yubilock.pid"
+
+mkdir -p "$CACHE_DIR"
 
 # `systemctl cat` succeeds whenever the unit file exists, whether or not it is
 # currently running — which is exactly the "is this a module install?" question.
