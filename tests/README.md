@@ -11,7 +11,7 @@ Nothing here can lock your session or power off your machine.
 ## Shell suites
 
 ```bash
-bash tests/run-all.sh          # all three
+bash tests/run-all.sh          # all four
 bash tests/state-machine.sh    # or individually
 ```
 
@@ -20,6 +20,7 @@ bash tests/state-machine.sh    # or individually
 | `state-machine.sh` | Removal end to end: lock then poweroff, cancel by reinserting, cancel by toggling off, the canary config, a machine with no config file, immediate poweroff, and the `-ff` → helper unit → `-i` fallback chain |
 | `suspend-guard.sh` | A suspend/resume mid-countdown abandons the countdown instead of firing against a stale timer. Uses a `date` stub that can be shoved an hour forward |
 | `toggle.sh` | The toggle drives systemd when the user unit exists and only backgrounds the monitor when it doesn't — getting this wrong leaves two monitors racing on one state file |
+| `cache-dir.sh` | All four scripts create `~/.cache` themselves on a machine that has no such directory. A script that cannot write its state file reads back `off` next run, which looks exactly like yubilock having been switched off on purpose |
 
 Each exits non-zero with a count of failed checks, so they drop straight into
 CI or a pre-commit hook.
