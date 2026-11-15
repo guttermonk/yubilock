@@ -30,8 +30,19 @@ periods.
 
 ## Nix tests
 
-These need a nixpkgs. With a channel configured, `<nixpkgs>` resolves on its
-own; otherwise point them at one explicitly.
+Both of these run from the flake, against its pinned nixpkgs:
+
+```bash
+nix flake check
+```
+
+That builds `checks.module-eval` (every `_ok` attribute of `eval.nix` true, and
+both assertion cases still rejecting) and `checks.packages` (all four scripts
+build). It does not run the shell suites above — they take over a minute of real
+`sleep` and background processes, so they stay a separate command.
+
+To run them by hand instead, they need a nixpkgs. With a channel configured,
+`<nixpkgs>` resolves on its own; otherwise point them at one explicitly.
 
 `eval.nix` is a function, and `nix-instantiate --eval` hands back the function
 itself rather than calling it, so import and apply it yourself:

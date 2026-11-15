@@ -90,12 +90,17 @@ If the machine suspends mid-countdown (lid close, idle suspend) and is resumed l
 
 ### Option 1: NixOS with Home Manager (Recommended for NixOS users)
 
-1. Import the module in your Home Manager configuration:
+1. Add yubilock to your flake inputs:
    ```nix
-   { config, pkgs, ... }:
+   inputs.yubilock.url = "github:guttermonk/yubilock";
+   ```
+
+2. Import the module and configure it:
+   ```nix
+   { config, pkgs, inputs, ... }:
    {
      imports = [
-       /path/to/yubilock/yubilock.nix
+       inputs.yubilock.homeManagerModules.default
      ];
 
      services.yubilock = {
@@ -109,11 +114,26 @@ If the machine suspends mid-countdown (lid close, idle suspend) and is resumed l
    }
    ```
 
-2. Add the custom module to your Waybar config (see [Waybar Configuration](#part-4-waybar-configuration)).
+   This assumes `inputs` reaches your Home Manager modules, which is usually
+   `extraSpecialArgs = { inherit inputs; }` where you call
+   `home-manager.lib.homeManagerConfiguration` (or the `home-manager.extraSpecialArgs`
+   option if you use the NixOS module).
 
-3. Add the CSS to your Waybar style.css (see [Waybar CSS Style](#part-5-waybar-css-style)).
+   The module takes `pkgs` from your configuration, so yubilock's own `nixpkgs`
+   input never affects what you build — it is used only by `nix flake check`
+   in this repository.
 
-4. Rebuild your configuration:
+   Not using flakes? Clone the repository and import the file by path. It is
+   the same module:
+   ```nix
+   imports = [ /path/to/yubilock/yubilock.nix ];
+   ```
+
+3. Add the custom module to your Waybar config (see [Waybar Configuration](#part-4-waybar-configuration)).
+
+4. Add the CSS to your Waybar style.css (see [Waybar CSS Style](#part-5-waybar-css-style)).
+
+5. Rebuild your configuration:
    ```bash
    home-manager switch
    ```
@@ -165,7 +185,7 @@ The immediate version, `systemctl poweroff -ff`, skips the system manager and ca
 
 ```nix
 {
-  imports = [ /path/to/yubilock/yubilock-system.nix ];
+  imports = [ inputs.yubilock.nixosModules.default ];
 
   services.yubilock-poweroff = {
     enable = true;
@@ -173,6 +193,10 @@ The immediate version, `systemctl poweroff -ff`, skips the system manager and ca
   };
 }
 ```
+
+This one is a NixOS module rather than a Home Manager one, so it goes in your
+system configuration. Without flakes, `imports = [ /path/to/yubilock/yubilock-system.nix ];`
+does the same thing.
 
 This adds a root-owned `yubilock-poweroff.service` and a polkit rule letting the chosen group start it without authentication. Yubilock tries `-ff` directly, then the helper unit, then falls back to `systemctl poweroff -i` — so it degrades gracefully if the helper is not installed.
 
