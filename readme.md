@@ -123,6 +123,15 @@ If the machine suspends mid-countdown (lid close, idle suspend) and is resumed l
    input never affects what you build — it is used only by `nix flake check`
    in this repository.
 
+   The scripts are also exposed as packages, should you want one without the
+   module — `yubilock`, `yubikey-status`, `yubilock-toggle` and
+   `yubilock-restore`, with `yubilock` as the default:
+   ```bash
+   nix run github:guttermonk/yubilock#yubikey-status
+   ```
+   These are the same derivations the module installs, not a second copy, so
+   they cannot drift from it.
+
    Not using flakes? Clone the repository and import the file by path. It is
    the same module:
    ```nix

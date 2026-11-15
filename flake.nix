@@ -26,6 +26,12 @@
         default = yubilock-poweroff;
       };
 
+      # The same derivations the Home Manager module installs - both sides
+      # import scripts.nix, so `nix run` cannot drift from a module install.
+      packages = forAllSystems (pkgs:
+        let scripts = import ./scripts.nix { inherit pkgs; };
+        in scripts // { default = scripts.yubilock; });
+
       checks = forAllSystems (pkgs:
         let
           lib = pkgs.lib;

@@ -14,38 +14,14 @@ let
   actionStr = a: if a == null then "" else a;
   actionName = a: if a == null then "null" else a;
 
-  runtimeDeps = with pkgs; [
-    usbutils    # lsusb
-    gnugrep
-    gawk
-    coreutils
-    procps      # pkill, ps
-    systemd     # systemctl, loginctl
-    libnotify   # notify-send
-  ];
+  # Defined in scripts.nix so the flake's `packages` output builds the same
+  # derivations this module installs, rather than a second copy of them.
+  scripts = import ./scripts.nix { inherit pkgs; };
 
-  # The module and the manual install run byte-identical logic — each script is
-  # read from scripts/ rather than duplicated here, so the two install paths
-  # cannot drift apart.
-  #
-  # writeShellScriptBin rather than writeShellApplication: the latter imposes
-  # `set -euo pipefail`, and fail-fast is the wrong posture for a security
-  # monitor. A stray non-zero exit from `pkill` or a missing config file would
-  # kill the process, leaving you unprotected while the indicator still reads
-  # ON. These scripts are written to keep running instead.
-  mkScript = name: file: extraDeps:
-    pkgs.writeShellScriptBin name ''
-      export PATH="${makeBinPath (runtimeDeps ++ extraDeps)}:$PATH"
-      ${builtins.readFile file}
-    '';
-
-  monitorPkg = mkScript "yubilock" ./scripts/yubilock.sh [ ];
-  statusPkg = mkScript "yubikey-status" ./scripts/yubikey-status.sh [ ];
-  # The toggle shells out to the monitor on non-systemd installs, so it needs
-  # to be able to find it.
-  togglePkg = mkScript "yubilock-toggle" ./scripts/yubilock-toggle.sh [ monitorPkg ];
-
-  restorePkg = mkScript "yubilock-restore" ./scripts/yubilock-restore.sh [ ];
+  monitorPkg = scripts.yubilock;
+  statusPkg = scripts.yubikey-status;
+  togglePkg = scripts.yubilock-toggle;
+  restorePkg = scripts.yubilock-restore;
 
 in {
   options.services.yubilock = {
